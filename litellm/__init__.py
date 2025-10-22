@@ -411,7 +411,9 @@ output_parse_pii: bool = False
 #############################################
 from litellm.litellm_core_utils.get_model_cost_map import get_model_cost_map
 
-model_cost = get_model_cost_map(url=model_cost_map_url)
+# Lazy-loaded via __getattr__ to reduce import time and memory
+_model_cost: Optional[dict] = None
+_model_cost_loaded = False
 cost_discount_config: Dict[str, float] = {}  # Provider-specific cost discounts {"vertex_ai": 0.05} = 5% discount
 custom_prompt_dict: Dict[str, dict] = {}
 check_provider_endpoint = False
@@ -564,7 +566,10 @@ def is_openai_finetune_model(key: str) -> bool:
 
 
 def add_known_models():
-    for key, value in model_cost.items():
+    """Populate model sets from the model cost map."""
+    if _model_cost is None:
+        return  # Skip if model_cost hasn't been loaded yet
+    for key, value in _model_cost.items():
         if value.get("litellm_provider") == "openai" and not is_openai_finetune_model(
             key
         ):
@@ -754,7 +759,7 @@ def add_known_models():
             lemonade_models.add(key)
 
 
-add_known_models()
+# add_known_models() is now called lazily when model_cost is first accessed
 # known openai compatible endpoints - we'll eventually move this list to the model_prices_and_context_window.json dictionary
 
 # this is maintained for Exception Mapping
@@ -1387,3 +1392,22 @@ def set_global_gitlab_config(config: Dict[str, Any]) -> None:
     """Set global BitBucket configuration for prompt management."""
     global global_gitlab_config
     global_gitlab_config = config
+
+
+####### LAZY LOADING ###################
+def __getattr__(name: str):
+    """
+    Lazy-loads `model_cost` to reduce import time and memory footprint.
+
+    The `model_cost` dictionary (~832 KB JSON with 23K+ entries) is loaded
+    on first access instead of during import, minimizing startup overhead.
+    """
+    if name == "model_cost":
+        global _model_cost, _model_cost_loaded
+        if _model_cost is None:
+            _model_cost = get_model_cost_map(url=model_cost_map_url)
+            _model_cost_loaded = True
+            # Populate model sets after loading cost map
+            add_known_models()
+        return _model_cost
+    raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
