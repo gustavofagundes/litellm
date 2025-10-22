@@ -1330,7 +1330,6 @@ from .exceptions import (
 )
 from .budget_manager import BudgetManager
 from .proxy.proxy_cli import run_server
-from .router import Router
 from .assistants.main import *
 from .batches.main import *
 from .images.main import *
@@ -1397,10 +1396,10 @@ def set_global_gitlab_config(config: Dict[str, Any]) -> None:
 ####### LAZY LOADING ###################
 def __getattr__(name: str):
     """
-    Lazy-loads `model_cost` to reduce import time and memory footprint.
+    Lazy-loads expensive modules to reduce import time and memory footprint.
 
-    The `model_cost` dictionary (~832 KB JSON with 23K+ entries) is loaded
-    on first access instead of during import, minimizing startup overhead.
+    - model_cost: ~832 KB JSON with 23K+ model pricing entries
+    - Router: Load balancing module
     """
     if name == "model_cost":
         global _model_cost, _model_cost_loaded
@@ -1410,4 +1409,10 @@ def __getattr__(name: str):
             # Populate model sets after loading cost map
             add_known_models()
         return _model_cost
+    
+    if name == "Router":
+        from .router import Router
+        globals()['Router'] = Router
+        return Router
+    
     raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
