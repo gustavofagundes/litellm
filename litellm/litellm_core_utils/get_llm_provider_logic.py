@@ -101,6 +101,10 @@ def get_llm_provider(  # noqa: PLR0915
 
     Return model, custom_llm_provider, dynamic_api_key, api_base
     """
+    # Ensure model sets are populated (triggers lazy loading of model_cost if needed)
+    if not litellm.open_ai_chat_completion_models and not custom_llm_provider:
+        _ = litellm.model_cost  # Trigger lazy loading to populate model sets
+    
     try:
         if litellm.LiteLLMProxyChatConfig._should_use_litellm_proxy_by_default(
             litellm_params=litellm_params
